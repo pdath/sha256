@@ -53,3 +53,8 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Project build outputs
+/sha256
+/sha256_unit_test
+.cflags

@@ -1,0 +1,64 @@
+I would like to create a requirements document.
+
+I contribute to many Bitcoin projects.  I often need to calculate a sha256 hash of a buffer.
+
+One of the key issues I have is that the sha256 hash algorithm implementation is often selected at compile time (by using gcc directives like -march=native).  The issue this creates is that the sha256 libraries that are built to be used on different machines (with different CPUs, or even a docker container) need to have CPU accelerated instructions disabled, and default to much slower software implementations of sha256, to ensure the single binary will work on many different CPUs.
+
+Their are existing libraries, such as openssl and libsodium, that can choose a specific implementation of sha256 at runtime, but benchmarking shows they are regularly outperformed by hand coded assembly language.
+
+I would like to implement sha256 in software, assembly language (using only "standard" CPU instructions), and assembly language using CPU cryptographic extensions, and then at run time, select the best algorithym to use.
+Many times, in previous years, I have attempted to use AI to create handcrafted sha256 functions using CPU accelerated instructions, and failed.  AI engines have previously gotten tripped up by the data alignment requirements for specific crypto CPU instructions, correctly setting up the call handling for calling the assembler from C, and other general issues.
+
+This code is being created for a competition, and I only have 7 days.  To make this realistic (and possible), these restrictions are being imposed:
+* Only Ubuntu and Amazon Linux are to be supported
+* Only ARM64 and ARM64+crypto CPU instruction sets are to be supported.
+* Only gcc to be supported.
+* All assembly language to be written using intrinsics (e,g. arm_acle.h and arm_neon.h) in C files.  This is to make C call handling simpler for the AI.
+* sha256 consists of three main phases, init, update and final.  Inside of update a sha256 transform is done.  The assembly language versions will only implement the transform.  The reset shall remain in C.
+
+To make this into an easier to use and test tool, I would then like to use this code to make a simple version of the Linux command sha256sum, to be able to calculate the sha256 hash of a file.
+
+Most of the Bitcoin ecosystem uses either C or C++.  Consequently, I want to implement this code in C so that it can be easily used with tools using either language.
+
+The #1 most important factor is that the sha256 hash is correct.  The incorrect generation of the sha256 could result in the loss of funds.  This is so important, that the software should perform an assert() and crash if a critical error is detected, rather than returning an error and run the risk of an upper layer not processing or detecting the error correctly.
+
+The #2 most important factor is speed.  Uglier looking code is acceptable if it gains speed.
+
+I would prefer a simple Makefile solution.  I would like make targets to build the code for production (the default target), for dev ("make dev"), with address sanitisation enabled ("make asan") and runs the unit test, and build for use with valgrind and runs the unit test ("make valgrind").
+
+Note that gcc will create the defines:
+__aarch64__ (set to 1) when compiling on an ARM64 CPU.
+__linux__ (set to 1) when compiling on Linux.
+
+
+#ifdef __aarch64__, then I want to use getauxval() to check if the current ARM64 CPU has HWCAP_SHA2 capabilities, at runtime.  If so, then use the version of the sha256 function that uses the native crypto extensions.  Failing that it should use the assembly language version that uses ARM64 but no crypto extensions.
+#else
+Only use the software implementation of sha256.
+#endif
+
+I envisage having files like:
+sha256.c, contains the function sha256(const unsigned char *input,unsigned int len,const unsigned char *hash)
+- "const unsigned char *" can be changed - it is just an indication
+- Should contain the software "C" implementation of sha256()
+- Callers make a single call to sha256() to calculate the hash of their buffer.
+- Internally sha256() will need to go through the init, update and final phases.
+sha256.h, contains public declarations used by other modules that will use sha256().
+sha256_arm.c, contains both the ARM64 and ARM64+crypto versions.  I'm thinking sha256_arm64() and sha256_arm64_neon().
+sha256_arm.h, contains the private definitions for the sha256.c module.
+sha256_unit_test.c, creates a separate program that when run performs both unit tests AND a benchmark
+main.c, implements the capability to calculate sha256 of a file, like sha256sum.  The test tool for the competition.
+- Make the output executable "sha256".
+
+A README.MD file needs to be created for the GitHub repository.  It needs to include information such as:
+* Project Description
+* The problem being solved
+* Key Features
+* Target Users
+* What to install (build environment)
+* The different make options
+* How to run "sha256", the Linux sha256sum, and how to check the results are correct.
+
+*** Beyond the scope because of the time constraints ***
+There is likely to be a sha256_x86.c, and potentially other processor families.
+
+
